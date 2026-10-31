@@ -1,0 +1,8 @@
+libchdr, the CHD (MAME compressed disk image) reader, from
+https://github.com/rtissera/libchdr at commit 47d794151b2b64f6aba60304e6480f4f5a2bc24b
+(2026-10-11), unmodified; only what a C build needs is kept. Licences:
+  libchdr       BSD 3-clause (LICENSE.txt)
+  LZMA SDK      public domain (deps/lzma-26.02/LICENSE)
+  miniz         MIT (header of deps/miniz-3.1.2/miniz.c)
+  zstd          BSD (deps/zstd-1.5.7/LICENSE, from zstd v1.5.7)
+  dr_flac       public domain or MIT-0 (end of include/dr_libs/dr_flac.h)

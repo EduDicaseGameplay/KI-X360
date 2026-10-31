@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# NADA do jogo entra neste repositório. Nem ROM, nem disco, nem código gerado
+# a partir deles, nem .xex compilado com esse código.
+# ---------------------------------------------------------------------------
+
+# Saídas de compilação (o .xex com -Rec contém o código do jogo)
+x360/build/
+x360/pc/build/
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.xex
+
+# Código traduzido do jogo (make_rec.ps1 gera rec_*.c, rec_dsp*.c, rec_tab.c)
+rec_*.c
+!src/rec_none.c
+rec/
+rec[0-9]*/
+
+# Snapshots da RAM e arquivos do jogo
+*.bin
+*.zip
+*.chd
+*.raw
+kinst/
+cache/
+saves/
+
+# Logs, gravações e capturas feitas jogando
+*.log
+*.wav
+*.mp4
+*.ppm
+interp_hist.txt
+rec_profile.txt
+rec_ops.txt
+
+# Sistema / editores
+Thumbs.db
+desktop.ini
+.vs/
+*.suo
+*.user

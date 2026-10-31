@@ -1,0 +1,13 @@
+# Texto sempre com fim de linha LF, no repositório e na pasta de trabalho
+# (o código veio assim do UltraCombo, e o PowerShell e o compilador do XDK leem LF sem problema).
+* text=auto eol=lf
+
+# Binários: nunca mexer
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.xex  binary
+*.exe  binary
+*.bin  binary
+*.zip  binary
+*.chd  binary

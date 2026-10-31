@@ -1,0 +1,49 @@
+KI-X360
+=======
+
+[English below]
+
+Port nativo para Xbox 360 do emulador UltraCombo (licenca MIT, veja
+LICENCA-UltraCombo-MIT.txt), que roda o Killer Instinct de arcade a partir dos
+seus proprios arquivos.
+
+ESTE default.xex CONTEM CODIGO DO JOGO (gerado dos seus arquivos): uso pessoal,
+nao compartilhe.
+
+INSTALAR
+1. Copie esta pasta para o HDD ou pendrive do Xbox 360. Dentro dela:
+     default.xex
+     kinst.zip           (o set do MAME)
+     kinst\kinst.chd     (o disco do MAME)
+2. Abra default.xex pelo Aurora, FreeStyle ou XeXMenu.
+3. Na primeira vez aparece a escolha de idioma (ingles ou portugues). Depois
+   ela pode ser trocada no menu.
+
+CONTROLES
+  D-pad / analogico esquerdo   direcoes
+  X  Y  RB                     socos fraco, medio, forte
+  A  B  RT                     chutes fraco, medio, forte
+  Start                        start
+  Back                         ficha
+  Back + LB + RB               modo de teste do arcade (dificuldade, etc.)
+  Clique do analogico DIREITO  menu de configuracoes (pausa o jogo)
+  Clique do analogico esquerdo mostra/esconde a velocidade
+  Back + Start (2 s)           sair
+
+O texto do proprio jogo (telas do arcade) esta na ROM e continua em ingles.
+Configuracoes em saves\kix360.ini; log em kix360.log.
+
+-------------------------------------------------------------------------------
+
+KI-X360 is a native Xbox 360 port of the UltraCombo emulator (MIT licence,
+see LICENCA-UltraCombo-MIT.txt) that runs arcade Killer Instinct from your
+own files. THIS default.xex CONTAINS GAME CODE built from your files: personal
+use only, do not share it.
+
+Put default.xex, kinst.zip (the MAME set) and kinst\kinst.chd in one folder
+on the console's HDD or USB drive and start default.xex from Aurora, FreeStyle
+or XeXMenu. The first start asks for the language; the menu changes it later.
+
+Controls: D-pad / left stick move; X Y RB punches; A B RT kicks; Start;
+Back = coin; Back + LB + RB = arcade test mode; RIGHT stick click = settings
+menu (pauses); left stick click = speed display; Back + Start (2 s) = quit.

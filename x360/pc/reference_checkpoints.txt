@@ -1,0 +1,1 @@
+﻿# Replaced by x360\reference.h (per-part hashes, made by make_reference.ps1).
