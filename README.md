@@ -16,7 +16,8 @@ This isn't a generic emulator stepping through the game one instruction at a tim
 - The original DCS board's sound, with the sound processor on a thread of its own
 - Controller 1 and controller 2
 - 720p output (3x integer scale, 4:3) or 480 lines; the console scales it to 1080
-- Settings menu: aspect (4:3, 4:3 with blurred sides, 16:9 zoom), filters (sharp, smooth, CRT with scanlines), brightness, gamma, saturation and language
+- Settings menu: aspect (4:3, 4:3 with blurred sides, full 16:9, 16:9 zoom), filters (sharp, smooth, CRT with scanlines), brightness, gamma, saturation, sound volume and language
+- Attack buttons you can change, separately for each player, saved until you change them again
 - High scores and the arcade's settings are really saved (name entry, operator test mode)
 - FPS / speed display
 
@@ -116,7 +117,7 @@ The program creates, next to the `.xex`:
 | File | What it is |
 |---|---|
 | `cache\roms\kinst\` | the ROMs extracted from the zip (first time only) |
-| `saves\kix360.ini` | your menu settings |
+| `saves\kix360.ini` | your menu settings and buttons |
 | `saves\ki-l15d.settings` | the arcade's settings and high scores |
 | `kix360.log` | log of the last session: speed, loading, errors |
 
@@ -134,7 +135,22 @@ The program creates, next to the `.xex`:
 | Left stick click | show/hide the speed |
 | Back + Start (hold 2 s) | quit |
 
+Those are the default attack buttons. To change them, open the menu and go to **Controller buttons**: pick the player and the attack, press A, then press the new button. Any of A, B, X, Y, LB, RB, LT and RT will do. If the button is already taken, the two attacks swap, so all six always have a button. Your choice is saved right away and stays until you change it, and **Restore defaults** puts that player back. Directions, Start, Back and the stick clicks can't be moved, so you can always reach the menu and quit.
+
 Free play is on. The game's own text is in the ROM and stays in English.
+
+## Picture and sound
+
+The arcade's picture is 4:3, so a 16:9 TV needs a choice, and the menu has four:
+
+| Screen | What you get |
+|---|---|
+| 4:3 original | The real proportions, with black bars on the sides |
+| 4:3 + side fill | The real proportions, with the picture blurred on the sides |
+| 16:9 full | Fills the TV and shows everything, but the fighters are a third wider |
+| 16:9 zoom | Keeps the proportions and fills the TV, but cuts off the life bars and the feet |
+
+**Sound volume** goes from 50% to 300%, and it starts at 200%. The arcade board on its own is quiet: a cabinet had an amplifier after it. 100% is the board's output as it is. At 200% my recording showed no distortion; if you go higher and it does distort, turn it down a step.
 
 ## Common problems
 
@@ -150,6 +166,7 @@ Free play is on. The game's own text is in the ROM and stays in English.
 - **Protected functions**: the functions that talk to the hardware and the game's disk driver are translated without optimisation (`x360/recomp/lista-protegida.txt`). Optimised, they broke the disk protocol on the 360.
 - **Sound**: the DCS board's ADSP-2105 DSP is also translated to C and runs on its own thread, on a separate core.
 - **Disk**: the CHD is read whole into memory and decompressed in the background (`src/ide.c`).
+- **Controller** (`x360/padmap.h`, tested on the PC by `x360/pc/padmap_test.cpp`): the button map sits outside the emulation. The game only ever sees the arcade's buttons.
 - **360 frontend** (`x360/main360.cpp`): Direct3D 9, XAudio2 and XInput. Emulation runs on a thread on core 1; picture and sound stay on the main thread.
 - **PC harness** (`x360/pc/harness.cpp`): runs the same core without a screen. It computes hashes of RAM and CPU at fixed frames, to compare versions, and has a sampling profiler (`--sample`).
 - The 360's PowerPC is big-endian and the game is little-endian: the game's memory stays little-endian and every access swaps the bytes.

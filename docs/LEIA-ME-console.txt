@@ -30,6 +30,8 @@ CONTROLES
   Clique do analogico esquerdo mostra/esconde a velocidade
   Back + Start (2 s)           sair
 
+Os golpes acima sao o padrao: troque em Menu > Botoes do controle (por jogador).
+O volume e a tela 16:9 tambem estao no menu.
 O texto do proprio jogo (telas do arcade) esta na ROM e continua em ingles.
 Configuracoes em saves\kix360.ini; log em kix360.log.
 

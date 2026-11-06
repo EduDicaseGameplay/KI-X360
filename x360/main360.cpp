@@ -33,6 +33,7 @@
 // Cabinet buttons, in the bit order of the input ports (config.h on the PC).
 enum { BTN_HQ, BTN_HM, BTN_HF, BTN_LQ, BTN_LM, BTN_LF,
        BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT, BTN_START, BTN_COIN };
+#include "padmap.h"
 
 /* ---------------------------------------------------------------- */
 /* Video                                                            */
@@ -48,21 +49,23 @@ static float display_hz = 60.0f;
 static uint32_t px[320 * 240];
 
 // Picture options (the settings menu, saved in saves\kix360.ini).
-enum { VIEW_43, VIEW_43_SIDES, VIEW_ZOOM, VIEW_N };        // 4:3; 4:3 over a blurred fill; 16:9 cropped
+// 4:3; 4:3 over a blurred fill; 16:9 stretched, all of it on screen; 16:9 cropped
+enum { VIEW_43, VIEW_43_SIDES, VIEW_WIDE, VIEW_ZOOM, VIEW_N };
 enum { FILTER_SHARP, FILTER_SMOOTH, FILTER_CRT, FILTER_N };
 static struct {
     int view, filter, scanlines, glow, bright, sat;          // scanlines/glow 0-10, bright/sat in %
     int gamma;                                               // in hundredths: above 100 lifts the mid tones
     bool show_speed;
-} opt = { VIEW_43, FILTER_SHARP, 6, 0, 100, 100, 115, false };   // TVs show the console's output darker than a PC monitor
+    int sound;                                               // in %: the board's output is quiet without a cabinet's amplifier
+} opt = { VIEW_43, FILTER_SHARP, 6, 0, 100, 100, 115, false, 200 };   // TVs show the console's output darker than a PC monitor
 
 static const char vs_src[] =
     "struct V { float4 pos : POSITION; float2 uv : TEXCOORD0; };\n"
     "V main(float2 pos : POSITION, float2 uv : TEXCOORD0) { V o; o.pos = float4(pos, 0, 1); o.uv = uv; return o; }\n";
 
 // The game picture. c0: texture size, 1/size. c1: filter (0 sharp, 1 smooth,
-// 2 CRT), scanline strength, screen pixels per game pixel, glow. c2:
-// brightness, saturation.
+// 2 CRT), scanline strength, screen pixels per game pixel down, glow. c2:
+// brightness, saturation, gamma, screen pixels per game pixel across.
 // Sharp: bilinear only across the edge of each game pixel, so pixels stay
 // square at any size. CRT: the same across, a soft bright line per game line
 // down, and a faint phosphor mask. Glow: bright areas bleed light around
@@ -72,13 +75,13 @@ static const char ps_src[] =
     "float4 c0 : register(c0);\n"
     "float4 c1 : register(c1);\n"
     "float4 c2 : register(c2);\n"
-    "float2 sharp(float2 uv, float k) {\n"
+    "float2 sharp(float2 uv, float2 k) {\n"
     "    float2 t = uv * c0.xy, f = frac(t) - 0.5, r = 0.5 - 0.5 / k;\n"
     "    f = (f - clamp(f, -r, r)) * k + 0.5;\n"
     "    return (floor(t) + f) * c0.zw;\n"
     "}\n"
     "float4 main(float2 uv : TEXCOORD0, float2 vp : VPOS) : COLOR {\n"
-    "    float k = max(c1.z, 1.0);\n"
+    "    float2 k = max(float2(c2.w, c1.z), float2(1.0, 1.0));\n"
     "    float3 c;\n"
     "    if (c1.x < 0.5) c = tex2D(s, sharp(uv, k)).rgb;\n"
     "    else if (c1.x < 1.5) c = tex2D(s, uv).rgb;\n"
@@ -187,8 +190,9 @@ static void draw_quad(float w, float h)       // half extents in clip space, cen
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, quad, sizeof quad[0]);
 }
 
-// Show a 320x240 0x00RRGGBB image filling the screen's height at 4:3, or its
-// width (cropping the top and bottom), with the chosen filter. Text screens
+// Show a 320x240 0x00RRGGBB image filling the screen's height at 4:3, the
+// whole screen (stretched across), or its width (cropping the top and bottom),
+// with the chosen filter. Text screens
 // (menus, errors) pass raw = true: plain sharp pixels, no effects.
 static void present_ex(const uint32_t *img, bool raw)
 {
@@ -207,6 +211,7 @@ static void present_ex(const uint32_t *img, bool raw)
     int view = raw ? VIEW_43 : opt.view;
     if (view == VIEW_ZOOM && pw < screen_w) { float k = screen_w / pw; pw *= k; ph *= k; }
     if (pw > screen_w && view != VIEW_ZOOM) { float k = screen_w / pw; pw *= k; ph *= k; }
+    if (view == VIEW_WIDE) { pw = (float)screen_w; ph = (float)screen_h; }
 
     const float size[4] = { 320, 240, 1.0f / 320, 1.0f / 240 };
     dev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 1.0f, 0);
@@ -225,7 +230,7 @@ static void present_ex(const uint32_t *img, bool raw)
     float f1[4] = { (float)(raw ? FILTER_SHARP : opt.filter), opt.scanlines / 10.0f, ph / 240.0f,
                     raw ? 0.0f : opt.glow / 10.0f };
     float f2[4] = { raw ? 1.0f : opt.bright / 100.0f, raw ? 1.0f : opt.sat / 100.0f,
-                    raw ? 1.0f : 100.0f / (float)opt.gamma, 0 };
+                    raw ? 1.0f : 100.0f / (float)opt.gamma, pw / 320.0f };
     dev->SetPixelShaderConstantF(1, f1, 1);
     dev->SetPixelShaderConstantF(2, f2, 1);
     dev->SetPixelShader(ps);
@@ -331,7 +336,11 @@ static void audio_pump(void)
         if (n > BUF_SAMPLES) n = BUF_SAMPLES;
         if (ring_r + n > played + (uint64_t)(NBUF - 1) * BUF_SAMPLES) break;   // all buffers busy
         int16_t *b = abuf[abuf_next];
-        for (uint64_t i = 0; i < n; i++) b[i] = ring[(ring_r + i) & (RING - 1)];
+        const int gain = opt.sound;             // here, not in the ring: the emulation's sound stays as it is
+        for (uint64_t i = 0; i < n; i++) {
+            int v = (int)ring[(ring_r + i) & (RING - 1)] * gain / 100;
+            b[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+        }
         XAUDIO2_BUFFER xb;
         memset(&xb, 0, sizeof xb);
         xb.AudioBytes = (UINT32)n * 2;
@@ -382,30 +391,7 @@ static uint32_t pad_bits(DWORD i, bool *test, bool *quit, bool *speed)
     static int skip[2];
     XINPUT_STATE s;
     if (!get_pad(i, &s, &skip[i])) return 0;
-    const XINPUT_GAMEPAD &g = s.Gamepad;
-    WORD b = g.wButtons;
-    if (b & XINPUT_GAMEPAD_LEFT_THUMB) *speed = true;
-    uint32_t h = 0;
-    const SHORT dz = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
-    if ((b & XINPUT_GAMEPAD_DPAD_UP) || g.sThumbLY > dz) h |= 1u << BTN_UP;
-    if ((b & XINPUT_GAMEPAD_DPAD_DOWN) || g.sThumbLY < -dz) h |= 1u << BTN_DOWN;
-    if ((b & XINPUT_GAMEPAD_DPAD_LEFT) || g.sThumbLX < -dz) h |= 1u << BTN_LEFT;
-    if ((b & XINPUT_GAMEPAD_DPAD_RIGHT) || g.sThumbLX > dz) h |= 1u << BTN_RIGHT;
-    if (b & XINPUT_GAMEPAD_X) h |= 1u << BTN_HQ;
-    if (b & XINPUT_GAMEPAD_Y) h |= 1u << BTN_HM;
-    if (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) h |= 1u << BTN_HF;
-    if (b & XINPUT_GAMEPAD_A) h |= 1u << BTN_LQ;
-    if (b & XINPUT_GAMEPAD_B) h |= 1u << BTN_LM;
-    if (g.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) h |= 1u << BTN_LF;
-    bool back = (b & XINPUT_GAMEPAD_BACK) != 0;
-    if (back && (b & XINPUT_GAMEPAD_LEFT_SHOULDER) && (b & XINPUT_GAMEPAD_RIGHT_SHOULDER)) { *test = true; return 0; }
-    if (back && (b & XINPUT_GAMEPAD_START)) { *quit = true; return 0; }
-    if (b & XINPUT_GAMEPAD_START) h |= 1u << BTN_START;
-    if (back) h |= 1u << BTN_COIN;
-    // the cabinet can't hold opposite directions at once
-    if ((h >> BTN_UP & 1) && (h >> BTN_DOWN & 1)) h &= ~(3u << BTN_UP);
-    if ((h >> BTN_LEFT & 1) && (h >> BTN_RIGHT & 1)) h &= ~(3u << BTN_LEFT);
-    return h;
+    return pad_translate((int)i, s.Gamepad, test, quit, speed);
 }
 
 static volatile bool menu_open;          // the main thread opens it; the emulation thread then waits
@@ -444,6 +430,7 @@ static bool settings_load(void)
     FILE *f = fopen(INI_PATH, "r");
     if (!f) return false;
     bool have_lang = false;
+    int pad_lines = 0;
     char line[128];
     while (fgets(line, sizeof line, f)) {
         char key[32];
@@ -457,9 +444,16 @@ static bool settings_load(void)
         else if (!strcmp(key, "saturation")) opt.sat = clampi(v, 0, 200);
         else if (!strcmp(key, "gamma")) opt.gamma = clampi(v, 70, 180);
         else if (!strcmp(key, "show_speed")) opt.show_speed = v != 0;
+        else if (!strcmp(key, "sound_volume")) opt.sound = clampi(v, 50, 300);
         else if (!strcmp(key, "language")) { ui_set_lang(v); have_lang = true; }
+        else if (padmap_load_key(key, v)) pad_lines++;
     }
     fclose(f);
+    if (padmap_check()) fprintf(stderr, "buttons: the file repeats a button, defaults used\n");
+    padmap_chosen();
+    char text[96];
+    padmap_text(text, sizeof text);
+    fprintf(stderr, "buttons from the file (%d lines): %s\n", pad_lines, text);
     return have_lang;
 }
 
@@ -467,9 +461,9 @@ static void settings_save(void)
 {
     _mkdir("game:\\saves");                     // the language screen comes before the boot makes it
     FILE *f = fopen(INI_PATH, "w");
-    if (!f) return;
+    if (!f) { fprintf(stderr, "settings: can't open %s to write\n", INI_PATH); return; }
     fprintf(f, "; KI-X360 settings (the menu writes this file: right stick click in game)\n");
-    fprintf(f, "; view: 0 = 4:3, 1 = 4:3 with blurred sides, 2 = 16:9 zoom (crops top and bottom)\n");
+    fprintf(f, "; view: 0 = 4:3, 1 = 4:3 with blurred sides, 2 = 16:9 full (stretched, nothing cut), 3 = 16:9 zoom (crops top and bottom)\n");
     fprintf(f, "view=%d\n", opt.view);
     fprintf(f, "; filter: 0 = sharp pixels, 1 = smooth, 2 = CRT\n");
     fprintf(f, "filter=%d\n", opt.filter);
@@ -478,9 +472,16 @@ static void settings_save(void)
     fprintf(f, "; gamma in hundredths, 70-180: above 100 lifts the mid tones (TVs show the picture darker)\n");
     fprintf(f, "gamma=%d\n", opt.gamma);
     fprintf(f, "show_speed=%d\n", opt.show_speed ? 1 : 0);
+    fprintf(f, "; sound volume in percent, 50-300: 100 is the arcade board's output as it is\n");
+    fprintf(f, "sound_volume=%d\n", opt.sound);
     fprintf(f, "; language: 0 = English, 1 = Portugues (Brasil)\n");
     fprintf(f, "language=%d\n", ui_lang());
-    fclose(f);
+    padmap_save(f);
+    bool ok = !ferror(f);
+    ok &= fclose(f) == 0;
+    char text[96];
+    padmap_text(text, sizeof text);
+    fprintf(stderr, "settings %s, buttons %s\n", ok ? "saved" : "NOT SAVED (write failed)", text);
 }
 
 // One pad's buttons this frame, and those just pressed (both pads).
@@ -493,7 +494,7 @@ static void poll_menu_pads(void)
     for (DWORD i = 0; i < 2; i++) {
         XINPUT_STATE s;
         if (!get_pad(i, &s, &skip[i])) continue;
-        WORD b = s.Gamepad.wButtons;
+        WORD b = pad_held(s.Gamepad);           // the button screen needs the triggers too
         const SHORT dz = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
         if (s.Gamepad.sThumbLY > dz) b |= XINPUT_GAMEPAD_DPAD_UP;
         if (s.Gamepad.sThumbLY < -dz) b |= XINPUT_GAMEPAD_DPAD_DOWN;
@@ -510,8 +511,12 @@ static void poll_menu_pads(void)
     pads_down = now;
 }
 
-enum { M_VIEW, M_FILTER, M_SCAN, M_GLOW, M_BRIGHT, M_GAMMA, M_SAT, M_SPEED, M_LANG, M_BACK, M_QUIT, M_N };
+enum { M_VIEW, M_FILTER, M_SCAN, M_GLOW, M_BRIGHT, M_GAMMA, M_SAT, M_SOUND, M_SPEED, M_LANG, M_BUTTONS, M_BACK, M_QUIT, M_N };
 static int menu_sel;
+// The button screen, a page of the menu: which player, and the attack waiting for a button (-1: none).
+enum { C_PLAYER, C_ATTACK, C_DEFAULTS = C_ATTACK + PAD_ATTACKS, C_BACK, C_N };
+static bool buttons_open;
+static int buttons_sel, buttons_player, buttons_wait = -1;
 
 // Change the selected item by d (-1 or +1).
 static void menu_change(int d)
@@ -524,6 +529,7 @@ static void menu_change(int d)
     case M_BRIGHT: opt.bright = clampi(opt.bright + 5 * d, 50, 150); break;
     case M_SAT: opt.sat = clampi(opt.sat + 10 * d, 0, 200); break;
     case M_GAMMA: opt.gamma = clampi(opt.gamma + 5 * d, 70, 180); break;
+    case M_SOUND: opt.sound = clampi(opt.sound + 25 * d, 50, 300); break;
     case M_SPEED: opt.show_speed = !opt.show_speed; break;
     case M_LANG: ui_set_lang((ui_lang() + d + LANG_N) % LANG_N); break;
     }
@@ -531,15 +537,74 @@ static void menu_change(int d)
 
 static void menu_close(void)
 {
+    buttons_open = false;
+    buttons_wait = -1;
     menu_open = false;
     settings_save();
     if (voice) voice->Start(0, 0);
+}
+
+// One frame of the button screen. Any pad may answer, so one person can set
+// up both players. Only the attacks' buttons can be taken: Start and Back
+// cancel, and the menu's own way in (right stick click) stays free.
+static void buttons_frame(const uint32_t *game_img)
+{
+    if (buttons_wait >= 0) {
+        if (pads_pressed & (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_BACK)) buttons_wait = -1;
+        else for (int i = 0; i < PAD_INPUTS; i++)
+            if (pads_pressed & pad_inputs[i].mask) {
+                padmap_assign(buttons_player, buttons_wait, i);
+                padmap_chosen();
+                settings_save();                // kept from this moment, whatever happens next
+                buttons_wait = -1;
+                break;
+            }
+    } else {
+        if (pads_pressed & (XINPUT_GAMEPAD_RIGHT_THUMB | XINPUT_GAMEPAD_START)) { menu_close(); return; }
+        if (pads_pressed & XINPUT_GAMEPAD_B) { buttons_open = false; return; }
+        if (pads_pressed & XINPUT_GAMEPAD_DPAD_UP) buttons_sel = (buttons_sel + C_N - 1) % C_N;
+        if (pads_pressed & XINPUT_GAMEPAD_DPAD_DOWN) buttons_sel = (buttons_sel + 1) % C_N;
+        if (buttons_sel == C_PLAYER && (pads_pressed & (XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_DPAD_RIGHT)))
+            buttons_player ^= 1;
+        if (pads_pressed & XINPUT_GAMEPAD_A) {
+            if (buttons_sel == C_PLAYER) buttons_player ^= 1;
+            else if (buttons_sel == C_DEFAULTS) { padmap_reset(buttons_player); padmap_chosen(); settings_save(); }
+            else if (buttons_sel == C_BACK) { buttons_open = false; return; }
+            else buttons_wait = buttons_sel - C_ATTACK;
+        }
+    }
+
+    const char *const attacks[PAD_ATTACKS] = {
+        tr("QUICK PUNCH", "SOCO FRACO"), tr("MEDIUM PUNCH", "SOCO MEDIO"), tr("FIERCE PUNCH", "SOCO FORTE"),
+        tr("QUICK KICK", "CHUTE FRACO"), tr("MEDIUM KICK", "CHUTE MEDIO"), tr("FIERCE KICK", "CHUTE FORTE"),
+    };
+    char it[C_N][64];
+    snprintf(it[C_PLAYER], 64, "%s\t%d", tr("PLAYER", "JOGADOR"), buttons_player + 1);
+    for (int a = 0; a < PAD_ATTACKS; a++)
+        snprintf(it[C_ATTACK + a], 64, "%s\t%s", attacks[a], a == buttons_wait ? "..." : pad_inputs[pad_map[buttons_player][a]].name);
+    snprintf(it[C_DEFAULTS], 64, "%s", tr("RESTORE DEFAULTS", "VOLTAR AO PADRAO"));
+    snprintf(it[C_BACK], 64, "%s", tr("BACK", "VOLTAR"));
+    const char *items[C_N];
+    for (int i = 0; i < C_N; i++) items[i] = it[i];
+
+    static uint32_t img[320 * 240];
+    memcpy(img, game_img, sizeof img);
+    const char *footer = buttons_wait >= 0 ? tr("PRESS A BUTTON  START: CANCEL", "APERTE UM BOTAO  START: CANCELA")
+                       : buttons_sel == C_PLAYER ? tr("LEFT/RIGHT: CHANGE PLAYER", "ESQ/DIR: TROCA O JOGADOR")
+                       : tr("A: CHANGE  B: BACK", "A: MUDAR  B: VOLTAR");
+    osd_menu(img, tr("CONTROLLER BUTTONS", "BOTOES DO CONTROLE"), items, C_N, buttons_sel, footer);
+    present_ex(img, false);
 }
 
 // One frame of the open menu: input, then the panel over the paused game.
 static void menu_frame(const uint32_t *game_img)
 {
     poll_menu_pads();
+    if (buttons_open) {
+        buttons_frame(game_img);
+        if (buttons_open || !menu_open) return;
+        pads_pressed = 0;                       // back on the main page: that press is spent
+    }
     if (pads_pressed & (XINPUT_GAMEPAD_B | XINPUT_GAMEPAD_RIGHT_THUMB | XINPUT_GAMEPAD_START)) { menu_close(); return; }
     if (pads_pressed & XINPUT_GAMEPAD_DPAD_UP) menu_sel = (menu_sel + M_N - 1) % M_N;
     if (pads_pressed & XINPUT_GAMEPAD_DPAD_DOWN) menu_sel = (menu_sel + 1) % M_N;
@@ -548,11 +613,12 @@ static void menu_frame(const uint32_t *game_img)
     if (pads_pressed & XINPUT_GAMEPAD_A) {
         if (menu_sel == M_BACK) { menu_close(); return; }
         if (menu_sel == M_QUIT) { menu_close(); quit_requested = true; return; }
+        if (menu_sel == M_BUTTONS) { buttons_open = true; buttons_sel = 0; buttons_wait = -1; pads_pressed = 0; buttons_frame(game_img); return; }
         menu_change(+1);
     }
 
     const char *views[VIEW_N] = { tr("4:3 ORIGINAL", "4:3 ORIGINAL"), tr("4:3 + SIDE FILL", "4:3 + LATERAIS"),
-                                  tr("16:9 ZOOM", "ZOOM 16:9") };
+                                  tr("16:9 FULL", "16:9 TELA CHEIA"), tr("16:9 ZOOM", "ZOOM 16:9") };
     const char *filters[FILTER_N] = { tr("SHARP", "NITIDO"), tr("SMOOTH", "SUAVE"), "CRT" };
     char it[M_N][64];
     snprintf(it[M_VIEW], 64, "%s\t%s", tr("SCREEN", "TELA"), views[opt.view]);
@@ -564,9 +630,11 @@ static void menu_frame(const uint32_t *game_img)
     snprintf(it[M_BRIGHT], 64, "%s\t%d%%", tr("BRIGHTNESS", "LUMINOSIDADE"), opt.bright);
     snprintf(it[M_SAT], 64, "%s\t%d%%", tr("COLOUR SATURATION", "SATURACAO DAS CORES"), opt.sat);
     snprintf(it[M_GAMMA], 64, "%s\t%d.%02d", tr("GAMMA (MID TONES)", "GAMMA (TONS MEDIOS)"), opt.gamma / 100, opt.gamma % 100);
+    snprintf(it[M_SOUND], 64, "%s\t%d%%", tr("SOUND VOLUME", "VOLUME DO SOM"), opt.sound);
     snprintf(it[M_SPEED], 64, "%s\t%s", tr("SHOW SPEED", "MOSTRAR VELOCIDADE"),
              opt.show_speed ? tr("YES", "SIM") : tr("NO", "NAO"));
     snprintf(it[M_LANG], 64, "%s\t%s", tr("LANGUAGE", "IDIOMA"), tr("ENGLISH", "PORTUGUES (BR)"));
+    snprintf(it[M_BUTTONS], 64, "%s", tr("CONTROLLER BUTTONS", "BOTOES DO CONTROLE"));
     snprintf(it[M_BACK], 64, "%s", tr("BACK TO THE GAME", "VOLTAR AO JOGO"));
     snprintf(it[M_QUIT], 64, "%s", tr("QUIT KI-X360", "SAIR DO KI-X360"));
     const char *items[M_N];
@@ -576,7 +644,11 @@ static void menu_frame(const uint32_t *game_img)
     static uint32_t img[320 * 240];
     memcpy(img, game_img, sizeof img);
     const char *footer = menu_sel == M_VIEW && opt.view == VIEW_ZOOM
-        ? tr("ZOOM CROPS THE TOP AND BOTTOM", "ZOOM CORTA O TOPO E A BASE")
+        ? tr("ZOOM HIDES THE LIFE BARS AND FEET", "ZOOM ESCONDE AS BARRAS DE VIDA E OS PES")
+        : menu_sel == M_VIEW && opt.view == VIEW_WIDE
+        ? tr("STRETCHED TO FILL, NOTHING CUT", "ESTICADO PARA ENCHER, SEM CORTAR")
+        : menu_sel == M_SOUND
+        ? tr("HEARD WHEN BACK IN THE GAME", "OUVE AO VOLTAR PARA O JOGO")
         : tr("A/B: OK/BACK  LEFT/RIGHT: CHANGE", "A/B: OK/VOLTAR  ESQ/DIR: MUDAR");
     osd_menu(img, tr("KI-X360  SETTINGS", "KI-X360  CONFIGURACOES"), items, M_N, menu_sel, footer);
     present_ex(img, false);
@@ -904,10 +976,15 @@ void __cdecl main()
     DWORD last_commit = GetTickCount(), rate_t0 = GetTickCount();
     uint64_t rate_f0 = 0;
     double game_pct = 0;                        // the game's real speed: frames run per second against the arcade's
+    bool menu_was_open = false;
     while (!quit_requested) {
         if (!ok) { read_input(); show_text(error_text, tr("PRESS BACK + START TO QUIT", "BACK + START PARA SAIR")); continue; }
-        if (menu_open) { menu_frame(game_px); continue; }
+        if (menu_open) { menu_frame(game_px); menu_was_open = true; continue; }
+        if (!padmap_guard()) fprintf(stderr, "buttons: changed outside the menu at frame %llu, chosen ones put back\n",
+                                     (unsigned long long)emu_frames);
         DWORD t = GetTickCount();
+        // the menu pauses the game: its time must not count against the speed shown
+        if (menu_was_open) { menu_was_open = false; rate_t0 = t; rate_f0 = emu_frames; }
         if (t - rate_t0 >= 1000) {
             uint64_t f = emu_frames;
             game_pct = 100.0 * (double)(f - rate_f0) / ((t - rate_t0) / 1000.0) / FRAME_HZ;

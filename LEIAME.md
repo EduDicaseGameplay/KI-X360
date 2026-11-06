@@ -16,7 +16,8 @@ Não é um emulador genérico rodando o jogo instrução por instrução. Ele pa
 - Som da placa DCS original, com o processador de som numa thread própria
 - Controle 1 e controle 2
 - Saída em 720p (escala 3x inteira, 4:3) ou 480 linhas; o console escala para 1080
-- Menu de configurações: proporção (4:3, 4:3 com laterais desfocadas, 16:9 com zoom), filtros (nítido, suave, CRT com scanlines), brilho, gama, saturação e idioma
+- Menu de configurações: proporção (4:3, 4:3 com laterais desfocadas, 16:9 cheio, 16:9 com zoom), filtros (nítido, suave, CRT com scanlines), brilho, gama, saturação, volume do som e idioma
+- Botões de golpe que você pode trocar, separados por jogador, salvos até você trocar de novo
 - Recordes e configurações do arcade são salvos de verdade (tela de nomes, modo de teste do operador)
 - Mostrador de FPS / velocidade
 
@@ -116,7 +117,7 @@ O programa cria, ao lado do `.xex`:
 | Arquivo | O que é |
 |---|---|
 | `cache\roms\kinst\` | as ROMs extraídas do zip (só na primeira vez) |
-| `saves\kix360.ini` | suas configurações do menu |
+| `saves\kix360.ini` | suas configurações do menu e botões |
 | `saves\ki-l15d.settings` | configurações do arcade e recordes |
 | `kix360.log` | log da última sessão: velocidade, carregamentos, erros |
 
@@ -134,7 +135,22 @@ O programa cria, ao lado do `.xex`:
 | Clique do analógico esquerdo | mostra/esconde a velocidade |
 | Back + Start (segure 2 s) | sair |
 
+Esses são os botões de golpe padrão. Para trocar, abra o menu e vá em **Botões do controle**: escolha o jogador e o golpe, aperte A e depois o botão novo. Vale A, B, X, Y, LB, RB, LT e RT. Se o botão já estiver em uso, os dois golpes trocam de lugar, então os seis sempre têm botão. A escolha é salva na hora e fica até você trocar de novo, e **Voltar ao padrão** restaura aquele jogador. Direções, Start, Back e os cliques dos analógicos não mudam, para você sempre conseguir abrir o menu e sair.
+
 Free play vem ligado. Os textos do próprio jogo estão na ROM e continuam em inglês.
+
+## Imagem e som
+
+A imagem do arcade é 4:3, então numa TV 16:9 é preciso escolher, e o menu tem quatro opções:
+
+| Tela | O que você tem |
+|---|---|
+| 4:3 original | A proporção real, com barras pretas nos lados |
+| 4:3 + laterais | A proporção real, com a imagem desfocada nos lados |
+| 16:9 tela cheia | Enche a TV e mostra tudo, mas os lutadores ficam um terço mais largos |
+| Zoom 16:9 | Mantém a proporção e enche a TV, mas corta as barras de vida e os pés |
+
+**Volume do som** vai de 50% a 300% e começa em 200%. A placa do arcade sozinha sai baixa: o fliperama tinha um amplificador depois dela. 100% é a saída original da placa. A 200% a minha gravação não mostrou distorção; se subir mais e distorcer, baixe um passo.
 
 ## Problemas comuns
 
@@ -150,6 +166,7 @@ Free play vem ligado. Os textos do próprio jogo estão na ROM e continuam em in
 - **Funções protegidas**: as funções que conversam com o hardware e o driver de disco do jogo são traduzidas sem otimização (`x360/recomp/lista-protegida.txt`). Otimizadas, elas quebravam o protocolo com o disco no 360.
 - **Som**: o DSP ADSP-2105 da placa DCS também é traduzido para C e roda numa thread própria, num núcleo separado.
 - **Disco**: o CHD é lido inteiro para a memória e descompactado em segundo plano (`src/ide.c`).
+- **Controle** (`x360/padmap.h`, testado no PC por `x360/pc/padmap_test.cpp`): a troca de botões fica fora da emulação. O jogo só enxerga os botões do arcade.
 - **Frontend do 360** (`x360/main360.cpp`): Direct3D 9, XAudio2 e XInput. A emulação roda numa thread no núcleo 1, e a imagem e o som ficam na thread principal.
 - **Harness de PC** (`x360/pc/harness.cpp`): roda o mesmo núcleo sem tela. Calcula hashes da RAM e da CPU em frames fixos, para comparar versões, e tem um perfilador por amostragem (`--sample`).
 - O PowerPC do 360 é big-endian e o jogo é little-endian: a memória do jogo fica em little-endian e cada acesso inverte os bytes.

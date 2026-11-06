@@ -2,7 +2,6 @@
 
 Estas são as minhas anotações enquanto fazia o port, versão por versão, do jeito que foram escritas na época (alguns caminhos e nomes de arquivo são de antes de o projeto virar KI-X360). Para compilar, siga o [LEIAME](../LEIAME.md) (em inglês: [README](../README.md)).
 
-
 Porta do UltraCombo (Killer Instinct arcade) para Xbox 360, gerando um `.xex` nativo.
 
 ## Velocidade: código traduzido
@@ -76,11 +75,25 @@ ficam em `saves\`, e o log em `ultracombo.log`.
 
 Free play vem ligado; sangue alto; finishing moves ligados.
 
+Desde a V12, os seis ataques podem ser trocados por jogador em Menu > Botões do controle,
+entre A, B, X, Y, LB, RB, LT e RT (`padmap.h`; teste no PC em `pc/padmap_test.cpp`). Os
+botões da tabela são o padrão. Direções, Start, Back e os cliques dos analógicos são fixos.
+
 ## Vídeo
 
 720p (3x inteiro, 4:3) ou 480 linhas (2x); o console escala para 1080. Um frame que
 perde o vblank por pouco é mostrado na hora; se a emulação passar de um quadro de
 tela, frames são pulados na exibição para o jogo manter a velocidade.
+
+Telas (`view` no ini): 0 = 4:3, 1 = 4:3 com laterais desfocadas, 2 = 16:9 esticado (4x na
+largura, 3x na altura, nada cortado), 3 = zoom 16:9 (4x, corta 30 linhas em cima e 30 embaixo:
+barras de vida e pés).
+
+## Som
+
+A placa sozinha sai baixa (no PC: pico -10 dBFS, média -31 dBFS, numa partida de 150 s); no
+arcade havia um amplificador depois dela. `sound_volume` no ini e Menu > Volume do som: 50–300%,
+padrão 200%, aplicado em `audio_pump`, com limite em 16 bits. A emulação não muda.
 
 ## Versões e base oficial
 
@@ -114,7 +127,13 @@ tela, frames são pulados na exibição para o jogo manter a velocidade.
 
 - **Versão principal desde o teste no console: V10** (`releases\2026-10-31_v10_BOA_cenario-sem-engasgo`).
 
-- **Candidato V11** (em teste): V10 mais duas coisas. (1) Código traduzido `rec9`: o recipe da v8
+- **Principal desde o teste no console: V13** (`releases\2026-11-05_v13_BOA_botoes-salvos-medidor`): V12 gravando os botões a cada troca, com guarda (`padmap_guard`) e
+  log do mapa, e medidor de velocidade sem contar o tempo de menu. Mesmo `src/` e `rec9`.
+
+- **V12**: V11 com botões configuráveis, 16:9 sem corte e volume do som, só
+  no frontend. `src/`, `boot.cpp` e `rec9` são os mesmos da V11. Build: `build360.ps1 -Rec work\rec9 -LogExc`.
+
+- **V11**: V10 mais duas coisas. (1) Código traduzido `rec9`: o recipe da v8
   mais `set KI2_RECOMP_FPU=1`, que traduz as operações de ponto flutuante mais usadas (helpers em
   `rec_gen.h` com as mesmas expressões de `cpu.c`; antes ~18 mil por frame iam para `rec_op` no
   cenário do Cinder). (2) `ide_unpack_begin`/`ide_unpack_step`: o CHD inteiro descompactado numa
